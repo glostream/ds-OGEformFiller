@@ -9,7 +9,7 @@ import re
 import time
 
 
-PATH = 'NM_12_17_2020.csv'
+CSVPATH = 'NM_12_17_2020.csv'
 URL = 'https://extapps2.oge.gov/201/Presiden.nsf/f54fd322068f23a385257fc40006f88e?OpenForm'
 
 
@@ -26,13 +26,25 @@ def getNames(path):
 			lastName = cols[lastNameIndex]
 			fullName = cols[fullNameIndex]
 			# print((lastName, fullName))
-			names.append((lastName, fullName))
+			if (lastName, fullName) not in names:
+				names.append((lastName, fullName))
 
 	return names
 
 
+def logRequest(filer, disclosures=''):
+	timeNow = time.strftime("%y%m%d%H", time.localtime())
+	fileName = 'log-{}.txt'.format(timeNow)
+	with open(fileName, 'a+') as f:
+		if filer:
+			f.write('{}\n'.format(filer))
+		if disclosures:
+			for d in disclosures:
+				f.write('	{}\n'.format(d))
+
+
 def main():
-	names = getNames(PATH)
+	names = getNames(CSVPATH)
 
 	chromeOptions = webdriver.ChromeOptions()
 	# chromeOptions.add_argument('--headless')
@@ -44,10 +56,12 @@ def main():
 
 	actions = ActionChains(driver)
 
-	names = [('Azar', 'Alex Michael Azar II')]
-	names = [('Mastroianni', 'Alex Michael Azar II'), ('Connery', 'Alex Michael Azar II')]
+	# names = [('Azar', 'Alex Michael Azar II')]
+	# names = [('Moore', 'Raymond H. Moore'), ('Connery', 'Joyce Michael Azar II')]
+
+	names = [('Miller', 'Debra L. Miller'), ('Miller', 'Brian D. Miller')]
 	for ln, fn in names:
-		print(ln, fn)
+		print('\n', ln, fn)
 
 		lastNameField = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="LastName"]')))
 		lastNameField.clear()
@@ -61,24 +75,46 @@ def main():
 		html = driver.page_source
 		key = 'No filers with last name:'
 		if re.search(key, html, re.IGNORECASE):
-			print('filer with last name {} not found'.format(ln))
+			print('Filer with last name {} not found'.format(ln))
+			logRequest('No filer with last name "{}".'.format(ln))
 			driver.close()
 			driver.switch_to.window(mainWindow)
+			continue
 
 		else:
-			findButton = driver.find_element_by_xpath('//*[@id="Filer"]').click()
-			disclosures = driver.find_elements_by_class_name('tooltip-input')
-			print(len(disclosures))
+			filers = driver.find_elements_by_xpath('//*[@id="Filer"]')
+			filerFound = False
+			for f in filers:
+				filerDetails = f.find_element_by_xpath('..').text
+				if filerDetails.split(' ')[1] == fn.split(' ')[0]:
+					filerFound = True
+					f.click()
+					break
+			if not filerFound:
+				print('Filer with full name {} not found'.format(fn))
+				logRequest('No filer with full name "{}".'.format(fn))
+				driver.close()
+				driver.switch_to.window(mainWindow)
+				continue
 
+			# filerDetails = driver.find_element_by_xpath('//*[@id="content"]/div[1]/label[1]').text
+			disclosures = driver.find_elements_by_class_name('tooltip-input')
+			logRequest('{}:'.format(filerDetails))
+
+			# print(len(disclosures))
 			for i in range(len(disclosures) // 5 + 1):
-				print(i)
+				# print(i)
 				disclosures = driver.find_elements_by_class_name('tooltip-input')
 
 				upperIndex = (i+1)*5
 				if len(disclosures) < (i+1)*5:
 					upperIndex = len(disclosures)
+				disclosuresText = []
 				for d in disclosures[i*5 : upperIndex]:
 					d.click()
+					text = d.find_element_by_xpath('..').text
+					disclosuresText.append(text)
+
 				addToCart = driver.find_element_by_xpath('//*[@id="content"]/div[2]/input').click()
 				
 				driver.switch_to.window(mainWindow)
@@ -97,7 +133,7 @@ def main():
 				cityField.send_keys('Cape Town')
 
 				stateDropdown = driver.find_element_by_xpath('//*[@id="State"]').click()
-				actions.send_keys('district').perform()
+				actions.send_keys('dis').perform()
 				actions.send_keys(Keys.ENTER).perform()
 
 				countyField = driver.find_element_by_xpath('//*[@id="Country"]')
@@ -120,10 +156,15 @@ def main():
 				alert = driver.switch_to.alert
 				alert.accept()
 
+				logRequest('', disclosuresText)
+
+				# driver.close()
+
 				nextFormButton = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '/html/body/form/div[2]/div/a[1]/font'))).click()
 				# nextFormButton = driver.find_element_by_xpath('/html/body/form/div[2]/div/a[1]/font').click()
 
 				if upperIndex == len(disclosures):
+					print('breaking')
 					break
 
 				lastNameField = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="LastName"]')))
@@ -135,12 +176,18 @@ def main():
 				findButton = driver.find_element_by_xpath('//*[@id="bodycontent"]/table/tbody/tr[2]/td/p[1]/input[1]').click()
 				driver.switch_to.window(driver.window_handles[1])
 
-				findButton = driver.find_element_by_xpath('//*[@id="Filer"]').click()
+				filers = driver.find_elements_by_xpath('//*[@id="Filer"]')
+				for f in filers:
+					filerDetails = f.find_element_by_xpath('..').text
+					if filerDetails.split(' ')[1] == fn.split(' ')[0]:
+						f.click()
+						break
+				# findButton = driver.find_element_by_xpath('//*[@id="Filer"]').click()
 				# disclosures = driver.find_elements_by_class_name('tooltip-input')
 
 
 
-	time.sleep(5)
+	time.sleep(3)
 
 	# driver.close()
 
