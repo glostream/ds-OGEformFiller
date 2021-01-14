@@ -9,7 +9,7 @@ import re
 import time
 
 
-CSVPATH = 'data/test.csv'
+CSVPATH = 'data/NM_12_17_2020_noDups.csv'
 URL = 'https://extapps2.oge.gov/201/Presiden.nsf/f54fd322068f23a385257fc40006f88e?OpenForm'
 
 
@@ -40,22 +40,22 @@ def createLogFile():
 	timeNow = time.strftime("%y%m%d%H", time.localtime())
 	fileName = 'logs/log-{}.csv'.format(timeNow)
 	with open(fileName, 'w+') as f:
-		s = 'pn_fullname;pn_agency;notes;disclosures_requested\n'
+		s = 'pn_fullname;pn_agency;notes;position;disclosures_requested\n'
 		f.write(s)
 	return fileName
 
 
-def logRequest(path, fullName, agency, note='', disclosures=''):
+def logRequest(path, fullName, agency, note='', position='', disclosures=''):
 	# timeNow = time.strftime("%y%m%d%H", time.localtime())
 	# fileName = 'logs/log-{}.csv'.format(timeNow)
 	with open(path, 'a+') as f:
 		if note:
-			s = '{};{};{};\n'.format(fullName, agency, note)
+			s = '{};{};{};;\n'.format(fullName, agency, note)
 			f.write(s)
 		# elif fullName:
 		# 	f.write('\n{};{};;'.format(fullName, agency))
 		elif disclosures:
-			s = '{};{};;'.format(fullName, agency)
+			s = '{};{};;{};'.format(fullName, agency, position)
 			f.write(s)
 			for d in disclosures:
 				if d == disclosures[-1]:
@@ -100,11 +100,11 @@ def main():
 	# names = [('Azar', 'Alex Michael Azar II')]
 	# names = [('Moore', 'Raymond H. Moore'), ('Connery', 'Joyce Michael Azar II')]
 
-	names = [('Lu', 'Donald Lu', 'Department of State')]
+	# names = [('Aponte', 'Mari Carmen Aponte', 'Department of State')]
 	for ln, fn, ag in names:
 		print('\n', ln, fn)
 
-		requestedDisclosures = []
+		# requestedDisclosures = []
 		positions = []
 
 		lastNameField = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="LastName"]')))
@@ -130,13 +130,15 @@ def main():
 			filerFound = False
 			for f in filers:
 				filerDetails = f.find_element_by_xpath('..').text
+				# print(filerDetails)
 				position = filerDetails.split(', ')[2]
-				print(position)
+				# print(position)
 				if filerDetails.split(' ')[1] == fn.split(' ')[0]:
 					filerFound = True
-					positions.append(position)
-					f.click()
-					break
+					if position.lower() not in map(lambda x : x.lower(), positions):
+						positions.append(position)
+					# f.click()
+					# break
 			if not filerFound:
 				print('Filer with full name {} not found'.format(fn))
 				logRequest(logFilePath, fn, ag, 'No filer with full name "{}"'.format(fn))
@@ -145,72 +147,122 @@ def main():
 				continue
 				
 			# filerDetails = driver.find_element_by_xpath('//*[@id="content"]/div[1]/label[1]').text
-			disclosures = driver.find_elements_by_class_name('tooltip-input')
-			if len(disclosures) == 0:
-				logRequest(logFilePath, fn, ag, 'No disclosures found for full name "{}"'.format(fn))
-				driver.close()
-				driver.switch_to.window(mainWindow)
-				continue
-
 			# logRequest(logFilePath, fn, ag)
 
-			# print(len(disclosures))
-			for i in range(len(disclosures) // 5 + 1):
-				# print(i)
+			for p in positions:
+				requestedDisclosures = []
+
+				# print('current position:', p)
+				filers = driver.find_elements_by_xpath('//*[@id="Filer"]')
+				for f in filers:
+					filerDetails = f.find_element_by_xpath('..').text
+					# print('details:', filerDetails)
+					position = filerDetails.split(', ')[2]
+					if filerDetails.split(' ')[1] == fn.split(' ')[0]:
+						if position.lower() == p.lower():
+							f.click()
+							break
+				
 				disclosures = driver.find_elements_by_class_name('tooltip-input')
+				if len(disclosures) == 0:
+					logRequest(logFilePath, fn, ag, 'No disclosures found for full name "{}" and position "{}"'.format(fn, p))
+					driver.close()
+					driver.switch_to.window(mainWindow)
 
-				upperIndex = (i+1)*5
-				if len(disclosures) < (i+1)*5:
-					upperIndex = len(disclosures)
-				for d in disclosures[i*5 : upperIndex]:
-					d.click()
-					text = d.find_element_by_xpath('..').text
-					requestedDisclosures.append(text)
+					if p == positions[-1]:
+						break
 
-				addToCart = driver.find_element_by_xpath('//*[@id="content"]/div[2]/input').click()
+					lastNameField = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="LastName"]')))
+					lastNameField.clear()
+					lastNameField.send_keys(ln)
+
+					mainWindow = driver.window_handles[0]
+
+					findButton = driver.find_element_by_xpath('//*[@id="bodycontent"]/table/tbody/tr[2]/td/p[1]/input[1]').click()
+					driver.switch_to.window(driver.window_handles[1])
+					continue
+
+				# print(len(disclosures))
+				for i in range(len(disclosures) // 5 + 1):
+					# print(i)
+					disclosures = driver.find_elements_by_class_name('tooltip-input')
+
+					upperIndex = (i+1)*5
+					if len(disclosures) < (i+1)*5:
+						upperIndex = len(disclosures)
+					for d in disclosures[i*5 : upperIndex]:
+						d.click()
+						text = d.find_element_by_xpath('..').text
+						requestedDisclosures.append(text)
+
+					addToCart = driver.find_element_by_xpath('//*[@id="content"]/div[2]/input').click()
+					
+					driver.switch_to.window(mainWindow)
+					
+
+					yourNameField = driver.find_element_by_xpath('//*[@id="Name"]')
+					# yourNameField.send_keys('David Szakonyi')
+					yourNameField.send_keys('Jason Barrella')
+
+					addressField = driver.find_element_by_xpath('//*[@id="Address"]')
+					# addressField.send_keys('2115 G St. NW')
+					addressField.send_keys('145 Arum Road, Table View')
+
+					cityField = driver.find_element_by_xpath('//*[@id="City"]')
+					# cityField.send_keys('Washington')
+					cityField.send_keys('Cape Town')
+
+					stateDropdown = driver.find_element_by_xpath('//*[@id="State"]').click()
+					actions.send_keys('di').perform()
+					actions.send_keys(Keys.ENTER).perform()
+
+					countyField = driver.find_element_by_xpath('//*[@id="Country"]')
+					countyField.clear()
+					countyField.send_keys('South Africa')
+
+					emailField = driver.find_element_by_xpath('//*[@id="Email"]')
+					# emailField.send_keys('declarationlinkage@gmail.com')
+					emailField.send_keys('jmbtis@gmail.com')
+
+					occupationField = driver.find_element_by_xpath('//*[@id="Occupation"]')
+					# occupationField.send_keys('Professor')
+					occupationField.send_keys('Student')
+
+					publicInterestGroupCheckbox = driver.find_element_by_xpath('/html/body/form/div[2]/table/tbody/tr[2]/td/p[2]/font[2]/label[3]/input').click()
+					statementCheckbox = driver.find_element_by_xpath('//*[@id="CheckBoxAgree"]').click()
+
+					## Submit ##
+					submitButton = driver.find_element_by_xpath('//*[@id="bodycontent"]/table/tbody/tr[2]/td/p[3]/input').click()
+					alert = driver.switch_to.alert
+					alert.accept()
+
+					nextFormButton = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '/html/body/form/div[2]/div/a[1]/font'))).click()
+
+					if upperIndex == len(disclosures):
+						break
+
+					lastNameField = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="LastName"]')))
+					lastNameField.clear()
+					lastNameField.send_keys(ln)
+
+					mainWindow = driver.window_handles[0]
+
+					findButton = driver.find_element_by_xpath('//*[@id="bodycontent"]/table/tbody/tr[2]/td/p[1]/input[1]').click()
+					driver.switch_to.window(driver.window_handles[1])
+
+					filers = driver.find_elements_by_xpath('//*[@id="Filer"]')
+					for f in filers:
+						filerDetails = f.find_element_by_xpath('..').text
+						# print('details:', filerDetails)
+						position = filerDetails.split(', ')[2]
+						if filerDetails.split(' ')[1] == fn.split(' ')[0]:
+							if position.lower() == p.lower():
+								f.click()
+								break
 				
-				driver.switch_to.window(mainWindow)
-				
+				logRequest(logFilePath, fn, ag, '', p, requestedDisclosures)
 
-				yourNameField = driver.find_element_by_xpath('//*[@id="Name"]')
-				# yourNameField.send_keys('David Szakonyi')
-				yourNameField.send_keys('Jason Barrella')
-
-				addressField = driver.find_element_by_xpath('//*[@id="Address"]')
-				# addressField.send_keys('2115 G St. NW')
-				addressField.send_keys('145 Arum Road, Table View')
-
-				cityField = driver.find_element_by_xpath('//*[@id="City"]')
-				# cityField.send_keys('Washington')
-				cityField.send_keys('Cape Town')
-
-				stateDropdown = driver.find_element_by_xpath('//*[@id="State"]').click()
-				actions.send_keys('dis').perform()
-				actions.send_keys(Keys.ENTER).perform()
-
-				countyField = driver.find_element_by_xpath('//*[@id="Country"]')
-				countyField.clear()
-				countyField.send_keys('South Africa')
-
-				emailField = driver.find_element_by_xpath('//*[@id="Email"]')
-				# emailField.send_keys('declarationlinkage@gmail.com')
-				emailField.send_keys('jmbtis@gmail.com')
-
-				occupationField = driver.find_element_by_xpath('//*[@id="Occupation"]')
-				# occupationField.send_keys('Professor')
-				occupationField.send_keys('Student')
-
-				publicInterestGroupCheckbox = driver.find_element_by_xpath('/html/body/form/div[2]/table/tbody/tr[2]/td/p[2]/font[2]/label[3]/input').click()
-				statementCheckbox = driver.find_element_by_xpath('//*[@id="CheckBoxAgree"]').click()
-
-				## Submit ##
-				submitButton = driver.find_element_by_xpath('//*[@id="bodycontent"]/table/tbody/tr[2]/td/p[3]/input').click()
-				alert = driver.switch_to.alert
-				alert.accept()
-
-				nextFormButton = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '/html/body/form/div[2]/div/a[1]/font'))).click()
-
-				if upperIndex == len(disclosures):
+				if p == positions[-1]:
 					break
 
 				lastNameField = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="LastName"]')))
@@ -222,15 +274,8 @@ def main():
 				findButton = driver.find_element_by_xpath('//*[@id="bodycontent"]/table/tbody/tr[2]/td/p[1]/input[1]').click()
 				driver.switch_to.window(driver.window_handles[1])
 
-				filers = driver.find_elements_by_xpath('//*[@id="Filer"]')
-				for f in filers:
-					filerDetails = f.find_element_by_xpath('..').text
-					if filerDetails.split(' ')[1] == fn.split(' ')[0]:
-						f.click()
-						break
 
-
-		logRequest(logFilePath, fn, ag, '', requestedDisclosures)
+			# logRequest(logFilePath, fn, ag, '', p, requestedDisclosures)
 
 	time.sleep(3)
 
