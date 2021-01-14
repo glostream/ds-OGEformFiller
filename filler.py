@@ -4,54 +4,95 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
-from random import randint
+import os
 import re
 import time
 
 
-CSVPATH = 'NM_12_17_2020.csv'
+CSVPATH = 'data/test.csv'
 URL = 'https://extapps2.oge.gov/201/Presiden.nsf/f54fd322068f23a385257fc40006f88e?OpenForm'
 
 
-def getNames(path):
+def getNames(path, oldIndex):
 	names = []
 	with open(path, 'r') as f:
 		head = f.readline()
-		heads = head.split(',')
+		heads = head.split(';')
 		lastNameIndex = heads.index('pn_lastname')
 		fullNameIndex = heads.index('pn_fullname')
+		agencyIndex = heads.index('pn_agency')
 
-		for line in f:
-			cols = line.split(',')
+		for i in range(oldIndex):
+			f.readline()
+
+		for index, line in enumerate(f):
+			cols = line.split(';')
 			lastName = cols[lastNameIndex]
 			fullName = cols[fullNameIndex]
+			agency = cols[agencyIndex]
 			# print((lastName, fullName))
-			if (lastName, fullName) not in names:
-				names.append((lastName, fullName))
+			names.append((lastName, fullName, agency))
+			if len(names) == 25:
+				return names, index + oldIndex + 1
 
-	return names
 
-
-def logRequest(filer, disclosures=''):
+def createLogFile():
 	timeNow = time.strftime("%y%m%d%H", time.localtime())
-	fileName = 'log-{}.txt'.format(timeNow)
-	with open(fileName, 'a+') as f:
-		if filer:
-			f.write('{}\n'.format(filer))
-		if disclosures:
+	fileName = 'logs/log-{}.csv'.format(timeNow)
+	with open(fileName, 'w+') as f:
+		s = 'pn_fullname;pn_agency;notes;disclosures_requested\n'
+		f.write(s)
+	return fileName
+
+
+def logRequest(path, fullName, agency, note='', disclosures=''):
+	# timeNow = time.strftime("%y%m%d%H", time.localtime())
+	# fileName = 'logs/log-{}.csv'.format(timeNow)
+	with open(path, 'a+') as f:
+		if note:
+			s = '{};{};{};\n'.format(fullName, agency, note)
+			f.write(s)
+		# elif fullName:
+		# 	f.write('\n{};{};;'.format(fullName, agency))
+		elif disclosures:
+			s = '{};{};;'.format(fullName, agency)
+			f.write(s)
 			for d in disclosures:
-				f.write('	{}\n'.format(d))
+				if d == disclosures[-1]:
+					f.write('{}'.format(d))
+				else:
+					f.write('{},'.format(d))
+			f.write('\n')
+
+
+def loadIndex():
+	if os.path.isfile('data/index'):
+		with open('data/index', 'r') as f:
+			return int(f.read())
+	else:
+		return 0
+
+
+def writeIndex(index):
+	with open('data/index', 'w+') as f:
+		f.write(str(index))
 
 
 def main():
-	names = getNames(CSVPATH)
+	index = loadIndex()
+	names, newIndex = getNames(CSVPATH, index)
+	writeIndex(newIndex)
 
+	logFilePath = createLogFile()
+
+	print(names[0], names[-1], newIndex, len(names))
+	# return
 	chromeOptions = webdriver.ChromeOptions()
 	# chromeOptions.add_argument('--headless')
 	# chromeOptions.add_argument('--window-size=1920,1080')
 	# chromeOptions.add_argument("--log-level=3")
 	
-	driver = webdriver.Chrome(executable_path='./chromedriver', options=chromeOptions)
+	driver = webdriver.Chrome(executable_path='data/chromedriver', options=chromeOptions)
 	driver.get(URL)
 
 	actions = ActionChains(driver)
@@ -59,9 +100,12 @@ def main():
 	# names = [('Azar', 'Alex Michael Azar II')]
 	# names = [('Moore', 'Raymond H. Moore'), ('Connery', 'Joyce Michael Azar II')]
 
-	names = [('Miller', 'Debra L. Miller'), ('Miller', 'Brian D. Miller')]
-	for ln, fn in names:
+	names = [('Lu', 'Donald Lu', 'Department of State')]
+	for ln, fn, ag in names:
 		print('\n', ln, fn)
+
+		requestedDisclosures = []
+		positions = []
 
 		lastNameField = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="LastName"]')))
 		lastNameField.clear()
@@ -76,7 +120,7 @@ def main():
 		key = 'No filers with last name:'
 		if re.search(key, html, re.IGNORECASE):
 			print('Filer with last name {} not found'.format(ln))
-			logRequest('No filer with last name "{}".'.format(ln))
+			logRequest(logFilePath, fn, ag, 'No filer with last name "{}"'.format(ln))
 			driver.close()
 			driver.switch_to.window(mainWindow)
 			continue
@@ -86,20 +130,29 @@ def main():
 			filerFound = False
 			for f in filers:
 				filerDetails = f.find_element_by_xpath('..').text
+				position = filerDetails.split(', ')[2]
+				print(position)
 				if filerDetails.split(' ')[1] == fn.split(' ')[0]:
 					filerFound = True
+					positions.append(position)
 					f.click()
 					break
 			if not filerFound:
 				print('Filer with full name {} not found'.format(fn))
-				logRequest('No filer with full name "{}".'.format(fn))
+				logRequest(logFilePath, fn, ag, 'No filer with full name "{}"'.format(fn))
+				driver.close()
+				driver.switch_to.window(mainWindow)
+				continue
+				
+			# filerDetails = driver.find_element_by_xpath('//*[@id="content"]/div[1]/label[1]').text
+			disclosures = driver.find_elements_by_class_name('tooltip-input')
+			if len(disclosures) == 0:
+				logRequest(logFilePath, fn, ag, 'No disclosures found for full name "{}"'.format(fn))
 				driver.close()
 				driver.switch_to.window(mainWindow)
 				continue
 
-			# filerDetails = driver.find_element_by_xpath('//*[@id="content"]/div[1]/label[1]').text
-			disclosures = driver.find_elements_by_class_name('tooltip-input')
-			logRequest('{}:'.format(filerDetails))
+			# logRequest(logFilePath, fn, ag)
 
 			# print(len(disclosures))
 			for i in range(len(disclosures) // 5 + 1):
@@ -109,11 +162,10 @@ def main():
 				upperIndex = (i+1)*5
 				if len(disclosures) < (i+1)*5:
 					upperIndex = len(disclosures)
-				disclosuresText = []
 				for d in disclosures[i*5 : upperIndex]:
 					d.click()
 					text = d.find_element_by_xpath('..').text
-					disclosuresText.append(text)
+					requestedDisclosures.append(text)
 
 				addToCart = driver.find_element_by_xpath('//*[@id="content"]/div[2]/input').click()
 				
@@ -156,15 +208,9 @@ def main():
 				alert = driver.switch_to.alert
 				alert.accept()
 
-				logRequest('', disclosuresText)
-
-				# driver.close()
-
 				nextFormButton = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '/html/body/form/div[2]/div/a[1]/font'))).click()
-				# nextFormButton = driver.find_element_by_xpath('/html/body/form/div[2]/div/a[1]/font').click()
 
 				if upperIndex == len(disclosures):
-					print('breaking')
 					break
 
 				lastNameField = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="LastName"]')))
@@ -182,10 +228,9 @@ def main():
 					if filerDetails.split(' ')[1] == fn.split(' ')[0]:
 						f.click()
 						break
-				# findButton = driver.find_element_by_xpath('//*[@id="Filer"]').click()
-				# disclosures = driver.find_elements_by_class_name('tooltip-input')
 
 
+		logRequest(logFilePath, fn, ag, '', requestedDisclosures)
 
 	time.sleep(3)
 
