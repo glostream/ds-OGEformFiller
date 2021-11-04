@@ -88,7 +88,7 @@ def main():
 	print(names[0], names[-1], newIndex, len(names))
 	# return
 	chromeOptions = webdriver.ChromeOptions()
-	# chromeOptions.add_argument('--headless')
+	chromeOptions.add_argument('--headless')
 	# chromeOptions.add_argument('--window-size=1920,1080')
 	# chromeOptions.add_argument("--log-level=3")
 	
@@ -201,32 +201,32 @@ def main():
 					
 
 					yourNameField = driver.find_element_by_xpath('//*[@id="Name"]')
-					# yourNameField.send_keys('David Szakonyi')
-					yourNameField.send_keys('Jason Barrella')
+					yourNameField.send_keys('David Szakonyi')
+					# yourNameField.send_keys('Jason Barrella')
 
 					addressField = driver.find_element_by_xpath('//*[@id="Address"]')
-					# addressField.send_keys('2115 G St. NW')
-					addressField.send_keys('145 Arum Road, Table View')
+					addressField.send_keys('2115 G St. NW')
+					# addressField.send_keys('145 Arum Road, Table View')
 
 					cityField = driver.find_element_by_xpath('//*[@id="City"]')
-					# cityField.send_keys('Washington')
-					cityField.send_keys('Cape Town')
+					cityField.send_keys('Washington')
+					# cityField.send_keys('Cape Town')
 
 					stateDropdown = driver.find_element_by_xpath('//*[@id="State"]').click()
 					actions.send_keys('di').perform()
 					actions.send_keys(Keys.ENTER).perform()
 
-					countyField = driver.find_element_by_xpath('//*[@id="Country"]')
-					countyField.clear()
-					countyField.send_keys('South Africa')
+					# countyField = driver.find_element_by_xpath('//*[@id="Country"]')
+					# countyField.clear()
+					# countyField.send_keys('South Africa')
 
 					emailField = driver.find_element_by_xpath('//*[@id="Email"]')
-					# emailField.send_keys('declarationlinkage@gmail.com')
-					emailField.send_keys('jmbtis@gmail.com')
+					emailField.send_keys('declarationlinkage@gmail.com')
+					# emailField.send_keys('jmbtis@gmail.com')
 
 					occupationField = driver.find_element_by_xpath('//*[@id="Occupation"]')
-					# occupationField.send_keys('Professor')
-					occupationField.send_keys('Student')
+					occupationField.send_keys('Professor')
+					# occupationField.send_keys('Student')
 
 					publicInterestGroupCheckbox = driver.find_element_by_xpath('/html/body/form/div[2]/table/tbody/tr[2]/td/p[2]/font[2]/label[3]/input').click()
 					statementCheckbox = driver.find_element_by_xpath('//*[@id="CheckBoxAgree"]').click()
